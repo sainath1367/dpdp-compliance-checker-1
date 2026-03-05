@@ -5,7 +5,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                git 'https://github.com/lokeshreddy47/dpdp-compliance-checker.git'
+                git branch: 'main', url: 'https://github.com/lokeshreddy47/dpdp-compliance-checker.git'
             }
         }
 
