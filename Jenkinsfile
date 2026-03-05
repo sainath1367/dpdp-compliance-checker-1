@@ -3,12 +3,6 @@ pipeline {
 
     stages {
 
-        stage('Clone Repository') {
-            steps {
-                git branch: 'main', url: 'https://github.com/lokeshreddy47/dpdp-compliance-checker.git'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 bat 'docker compose build'
