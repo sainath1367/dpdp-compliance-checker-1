@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+.dark {
+  background-color: #0f172a;
+  color: white;
+}
+/* Smooth transition */
+
+body{
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+
+/* LIGHT THEME */
+
+body{
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+
+/* DARK AI THEME */
+
+body.dark{
+  background: linear-gradient(
+      135deg,
+      #020617,
+      #0f172a,
+      #020617
+  );
+
+  color: #e2e8f0;
+}
+
+
+/* Cards */
+
+body.dark .bg-white{
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #1e293b;
+}
+
+
+/* Inputs */
+
+body.dark input{
+  background: #020617;
+  border: 1px solid #334155;
+  color: white;
+}
+
+
+/* Buttons */
+
+body.dark button{
+  transition: 0.3s;
+}
+
+body.dark button:hover{
+  transform: scale(1.03);
+}
