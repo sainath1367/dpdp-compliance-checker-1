@@ -140,4 +140,60 @@ def get_reports():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)    return history
+
+
+# ==========================
+# Alias for history endpoint
+# ==========================
+@app.get("/history/")
+def get_history():
+    """Alias endpoint for /reports-history for frontend compatibility"""
+    reports_file = "reports/report_history.json"
+    
+    if not os.path.exists(reports_file):
+        return []
+    
+    try:
+        with open(reports_file, "r") as f:
+            history = json.load(f)
+        return history
+    except Exception as e:
+        print(f"Error reading history: {e}")
+        return []
+
+
+# ==========================
+# Export compliance history to CSV
+# ==========================
+@app.get("/export-csv/")
+def export_csv():
+    """Export compliance history as CSV file"""
+    import csv
+    from io import StringIO
+    
+    reports_file = "reports/report_history.json"
+    
+    if not os.path.exists(reports_file):
+        return {"error": "No history to export"}
+    
+    try:
+        with open(reports_file, "r") as f:
+            history = json.load(f)
+        
+        # Create CSV content
+        output = StringIO()
+        if history:
+            writer = csv.DictWriter(output, fieldnames=history[0].keys())
+            writer.writeheader()
+            for record in history:
+                writer.writerow(record)
+        
+        csv_content = output.getvalue()
+        
+        return {
+            "filename": f"compliance-history-{datetime.now().strftime('%Y-%m-%d')}.csv",
+            "content": csv_content
+        }
+    except Exception as e:
+        return {"error": f"Failed to export CSV: {str(e)}"}

@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import UploadPolicy from "./pages/UploadPolicy";
 import Reports from "./pages/Reports";
+import History from "./pages/History";
 import Navbar from "./components/Navbar";
 
 function App() {
@@ -65,6 +66,11 @@ function App() {
         <Route path="/reports" element={
           <ProtectedRoute>
             <Reports user={user} />
+          </ProtectedRoute>
+        } />
+        <Route path="/history" element={
+          <ProtectedRoute>
+            <History user={user} />
           </ProtectedRoute>
         } />
       </Routes>
