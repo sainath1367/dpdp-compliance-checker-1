@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function Login() {
 
@@ -8,6 +8,16 @@ function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [user, setUser] = useState(null);
+
+  // Check for existing session on load
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+      navigate("/dashboard");
+    }
+  }, [navigate]);
 
   const handleLogin = () => {
 
@@ -15,6 +25,17 @@ function Login() {
       alert("Enter email and password");
       return;
     }
+
+    // Simulate Google login (in real app, integrate with Google OAuth)
+    const mockUser = {
+      email: email,
+      displayName: email.split('@')[0],
+      uid: "user_" + Date.now()
+    };
+
+    // Save to localStorage for session persistence
+    localStorage.setItem("user", JSON.stringify(mockUser));
+    setUser(mockUser);
 
     navigate("/dashboard");
   };

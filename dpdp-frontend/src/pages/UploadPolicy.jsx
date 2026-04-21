@@ -2,70 +2,72 @@ import Sidebar from "../components/Sidebar";
 import { useState } from "react";
 import API from "../services/api";
 
-function UploadPolicy() {
+function UploadPolicy({ user }) {
 
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // File Upload Analysis
   const handleUpload = async () => {
 
     if (!file) {
-      alert("Please upload a file");
+      setError("Please upload a file");
       return;
     }
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("website_url", file.name); // Use filename as URL for file upload
 
     try {
-
       setLoading(true);
+      setError(null);
 
-      const response = await API.post("/analyze-policy", formData);
+      // For file upload, we'll use the URL endpoint with a simulated URL
+      const response = await API.post("/check-compliance/", formData);
 
       setResult(response.data);
 
     } catch (error) {
-
       console.error(error);
-      alert("Error analyzing policy");
-
+      setError("Error analyzing policy. Please try again.");
     }
 
     setLoading(false);
-
   };
 
   // URL Analysis
   const handleURLAnalysis = async () => {
 
     if (!url) {
-      alert("Enter website URL");
+      setError("Enter website URL");
       return;
     }
 
     try {
-
       setLoading(true);
+      setError(null);
 
-      const response = await API.post("/analyze-url", {
-        url: url
-      });
+      const formData = new FormData();
+      formData.append("website_url", url);
+
+      const response = await API.post("/check-compliance/", formData);
 
       setResult(response.data);
 
     } catch (error) {
-
       console.error(error);
-      alert("Error analyzing URL");
-
+      setError("Error analyzing URL. Please check the URL and try again.");
     }
 
     setLoading(false);
+  };
 
+  // Download Report
+  const handleDownloadReport = () => {
+    window.open("http://localhost:8000/download-report", "_blank");
   };
 
   return (
@@ -86,7 +88,7 @@ function UploadPolicy() {
 
         {/* Upload Section */}
 
-        <div className="bg-white p-6 rounded-xl shadow mb-6">
+        <div className="glass p-6 rounded-xl shadow mb-6">
 
           <h2 className="text-lg font-semibold mb-3">
             Upload Privacy Policy File
@@ -108,7 +110,7 @@ function UploadPolicy() {
 
         {/* URL Analysis */}
 
-        <div className="bg-white p-6 rounded-xl shadow mb-6">
+        <div className="glass p-6 rounded-xl shadow mb-6">
 
           <h2 className="text-lg font-semibold mb-3">
             Analyze Website Privacy Policy URL
@@ -132,20 +134,28 @@ function UploadPolicy() {
         </div>
 
         {/* Loading */}
-
         {loading && (
-
-          <div className="text-blue-600 font-semibold mb-6">
-            AI analyzing privacy policy...
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded">
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent mr-3"></div>
+              AI analyzing privacy policy... Please wait
+            </div>
           </div>
+        )}
 
+        {/* Error */}
+        {error && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
+            <p className="font-semibold">Error</p>
+            <p>{error}</p>
+          </div>
         )}
 
         {/* Results */}
 
         {result && (
 
-          <div className="bg-white p-6 rounded-xl shadow">
+          <div className="glass p-6 rounded-xl shadow">
 
             {/* Score */}
 
@@ -162,19 +172,19 @@ function UploadPolicy() {
               </p>
 
               {result.risk_level === "Low Risk" && (
-                <div className="bg-green-100 text-green-700 p-3 rounded w-48">
+                <div className="bg-gradient-to-r from-green-100 to-emerald-100 border-l-4 border-green-500 text-green-700 p-3 rounded w-48">
                   Low Risk
                 </div>
               )}
 
               {result.risk_level === "Medium Risk" && (
-                <div className="bg-yellow-100 text-yellow-700 p-3 rounded w-48">
+                <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border-l-4 border-yellow-500 text-yellow-700 p-3 rounded w-48">
                   Medium Risk
                 </div>
               )}
 
               {result.risk_level === "High Risk" && (
-                <div className="bg-red-100 text-red-700 p-3 rounded w-48">
+                <div className="bg-gradient-to-r from-red-100 to-rose-100 border-l-4 border-red-500 text-red-700 p-3 rounded w-48">
                   High Risk
                 </div>
               )}
@@ -232,6 +242,16 @@ function UploadPolicy() {
               alt="Compliance Chart"
               className="mt-4 w-full max-w-3xl border rounded"
             />
+
+            {/* Download Report Button */}
+            <div className="mt-6 text-center">
+              <button
+                onClick={handleDownloadReport}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition"
+              >
+                📄 Download PDF Report
+              </button>
+            </div>
 
           </div>
 

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 
-function Navbar() {
+function Navbar({ user, onLogout }) {
 
   const [darkMode, setDarkMode] = useState(false);
 
@@ -25,18 +25,34 @@ function Navbar() {
 
       <div className="flex items-center gap-6">
 
-        <Link to="/dashboard">Dashboard</Link>
-        <Link to="/upload">Analyze Policy</Link>
-        <Link to="/reports">Reports</Link>
+        {user ? (
+          <>
+            <Link to="/dashboard" className="hover:text-blue-200 transition">Dashboard</Link>
+            <Link to="/upload" className="hover:text-blue-200 transition">Analyze Policy</Link>
+            <Link to="/reports" className="hover:text-blue-200 transition">Reports</Link>
+
+            <span className="text-sm">
+              Welcome, {user.displayName}
+            </span>
+
+            <button
+              onClick={onLogout}
+              className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition"
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <Link to="/" className="hover:text-blue-200 transition">Login</Link>
+        )}
 
         {/* Theme Toggle Button */}
-
         <button
-  onClick={() => setDarkMode(!darkMode)}
-  className="text-2xl bg-white/10 p-2 rounded-full hover:bg-white/20 transition"
->
-  {darkMode ? "☀️" : "🌙"}
-</button>
+          onClick={() => setDarkMode(!darkMode)}
+          className="text-2xl bg-white/10 p-2 rounded-full hover:bg-white/20 transition"
+        >
+          {darkMode ? "☀️" : "🌙"}
+        </button>
       </div>
 
     </div>

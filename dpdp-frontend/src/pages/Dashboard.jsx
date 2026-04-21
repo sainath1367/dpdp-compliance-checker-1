@@ -1,7 +1,8 @@
 import Sidebar from "../components/Sidebar";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
-function Dashboard() {
+function Dashboard({ user }) {
 
   return (
 
@@ -11,15 +12,22 @@ function Dashboard() {
 
       <div className="ml-64 p-10 w-full bg-gray-100 min-h-screen">
 
-        <h1 className="text-3xl font-bold mb-8">
-          Compliance Dashboard
-        </h1>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">
+            Compliance Dashboard
+          </h1>
+          {user && (
+            <p className="text-gray-600">
+              Welcome back, {user.displayName}! Ready to check DPDP compliance?
+            </p>
+          )}
+        </div>
 
         <div className="grid grid-cols-3 gap-8">
 
           <motion.div
             whileHover={{ scale:1.05 }}
-            className="bg-white p-6 rounded-xl shadow-lg"
+            className="glass glass-hover p-6 rounded-xl shadow-lg"
           >
             <h2 className="text-lg font-semibold">
               Compliance Score
@@ -32,7 +40,7 @@ function Dashboard() {
 
           <motion.div
             whileHover={{ scale:1.05 }}
-            className="bg-white p-6 rounded-xl shadow-lg"
+            className="glass glass-hover p-6 rounded-xl shadow-lg"
           >
             <h2 className="text-lg font-semibold">
               Policy Upload
@@ -45,7 +53,7 @@ function Dashboard() {
 
           <motion.div
             whileHover={{ scale:1.05 }}
-            className="bg-white p-6 rounded-xl shadow-lg"
+            className="glass glass-hover p-6 rounded-xl shadow-lg"
           >
             <h2 className="text-lg font-semibold">
               Reports
