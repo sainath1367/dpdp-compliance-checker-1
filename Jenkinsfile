@@ -10,7 +10,6 @@ pipeline {
     environment {
         REGISTRY = 'docker.io'
         IMAGE_BACKEND = 'dpdp-compliance-checker-backend'
-        IMAGE_FRONTEND = 'dpdp-compliance-checker-frontend'
         DOCKER_BUILDKIT = '1'
     }
 
@@ -40,7 +39,7 @@ pipeline {
                 dir('dpdp-frontend') {
                     sh 'npm install --legacy-peer-deps || npm install'
                     sh 'npm run build'
-                    sh 'echo "✓ Frontend build successful"'
+                    sh 'echo "✓ Frontend dist built"'
                 }
             }
         }
@@ -73,15 +72,12 @@ pipeline {
 
         stage('🔗 Health Check') {
             steps {
-                echo '========== HEALTH CHECKING SERVICES =========='
+                echo '========== HEALTH CHECKING SERVICE =========='
                 sh '''
-                    echo "Checking Backend..."
-                    curl -f http://localhost:8000/ || echo "Backend starting..."
+                    echo "Checking Backend and frontend bundle..."
+                    curl -f http://localhost:8000/ || echo "Backend not available"
                     echo ""
-                    echo "Checking Frontend..."
-                    curl -f http://localhost:5173/ || echo "Frontend starting..."
-                    echo ""
-                    echo "✓ Services are running"
+                    echo "✓ Service is running"
                 '''
             }
         }
@@ -105,7 +101,6 @@ pipeline {
                 sh '''
                     mkdir -p artifacts
                     docker compose logs backend > artifacts/backend.log || true
-                    docker compose logs frontend > artifacts/frontend.log || true
                     ls -lh artifacts/
                 '''
             }
@@ -121,13 +116,12 @@ pipeline {
 
         success {
             echo '✅ PIPELINE SUCCESSFUL - Application is ready for deployment'
-            sh 'echo "Frontend: http://localhost:5173" && echo "Backend: http://localhost:8000"'
+            sh 'echo "Application available at http://localhost:8000"'
         }
 
         failure {
             echo '❌ PIPELINE FAILED - Check logs above'
             sh 'docker compose logs backend --tail 20 || true'
-            sh 'docker compose logs frontend --tail 20 || true'
         }
 
         unstable {
