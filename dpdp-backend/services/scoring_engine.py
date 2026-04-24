@@ -56,20 +56,37 @@ def analyze_with_llm(policy_text, clauses):
     genai.configure(api_key=EXTERNAL_API_KEY)
 
     prompt = f"""
-You are an expert Indian DPDP Act auditor.
+You are an expert auditor for India's DPDP Act.
 
-Analyze the following privacy policy:
+TASK:
+Evaluate the given privacy policy against DPDP compliance.
 
+INPUT:
+Privacy Policy:
 {policy_text}
 
-Against these clauses:
+DPDP Clauses:
 {json.dumps(clauses, indent=2)}
 
-Return ONLY JSON:
+INSTRUCTIONS:
+- Analyze each clause carefully
+- Assign a compliance score (0–100)
+- Identify risks and missing elements
+- Be strict and professional
+
+OUTPUT FORMAT (STRICT JSON ONLY):
 {{
     "overall_score": number,
-    "risk_level": "Low/Medium/High",
-    "explanations": ["..."]
+    "risk_level": "Low" | "Medium" | "High",
+    "clause_analysis": [
+        {{
+            "clause": "Clause name",
+            "score": number,
+            "status": "Compliant" | "Partial" | "Non-Compliant",
+            "reason": "Short explanation"
+        }}
+    ],
+    "recommendations": ["..."]
 }}
 """
 
@@ -77,6 +94,19 @@ Return ONLY JSON:
     response = model.generate_content(prompt)
 
     return response.text
+
+
+def clean_json(response_text):
+    response_text = response_text.strip()
+
+    if response_text.startswith("```"):
+        parts = response_text.split("```")
+        if len(parts) > 1:
+            response_text = parts[1]
+        if response_text.startswith("json"):
+            response_text = response_text[4:].strip()
+
+    return json.loads(response_text)
 
 
 def cosine_similarity(a, b):
@@ -121,15 +151,15 @@ def analyze_compliance(policy_text: str):
     if USE_EXTERNAL_API:
         try:
             llm_response = analyze_with_llm(policy_text, clauses)
-            result = json.loads(llm_response)
+            result = clean_json(llm_response)
             # Add missing fields for compatibility
             result.setdefault("section_analysis", {})
             result.setdefault("missing_clauses", [])
-            result.setdefault("recommendations", [])
             result.setdefault("graph_path", "")
+            result.setdefault("explanations", [])
             return result
         except Exception as e:
-            print(f"API failed, fallback to local model: {e}")
+            print(f"LLM parsing failed, fallback to local model: {e}")
             # Fall through to local logic
 
     # Local model logic continues
