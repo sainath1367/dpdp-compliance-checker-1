@@ -7,12 +7,6 @@ pipeline {
 
     stages {
 
-        stage('Clone Repo') {
-            steps {
-                git 'https://github.com/sainath1367/dpdp-compliance-checker-1.git'
-            }
-        }
-
         stage('Setup Environment') {
             steps {
                 sh '''
@@ -39,7 +33,7 @@ pipeline {
                 sh '''
                     cd dpdp-backend
                     . venv/bin/activate
-                    python -c "print('Backend dependencies installed successfully')"
+                    python -c "print('Backend OK')"
                 '''
             }
         }
@@ -47,7 +41,6 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh '''
-                    echo "Building Docker image..."
                     docker build -t dpdp-backend ./dpdp-backend || true
                 '''
             }
@@ -56,7 +49,6 @@ pipeline {
         stage('Run Container') {
             steps {
                 sh '''
-                    echo "Running container..."
                     docker run -d -p 8000:8000 dpdp-backend || true
                 '''
             }
@@ -65,17 +57,8 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    echo "Checking backend..."
                     sleep 10
                     curl -f http://localhost:8000/docs || echo "Backend not ready"
-                '''
-            }
-        }
-
-        stage('Frontend Build (Optional)') {
-            steps {
-                sh '''
-                    echo "Skipping frontend (Node.js not installed in Jenkins container)"
                 '''
             }
         }
@@ -91,25 +74,15 @@ pipeline {
 
     post {
         always {
-            steps {
-                sh '''
-                    echo "Cleaning up..."
-                    docker stop $(docker ps -q) || true
-                    docker system prune -f || true
-                '''
-            }
+            sh '''
+            docker system prune -f || true
+            '''
         }
-
         success {
-            steps {
-                echo 'Pipeline succeeded!'
-            }
+            echo 'Pipeline succeeded!'
         }
-
         failure {
-            steps {
-                echo 'Pipeline failed!'
-            }
+            echo 'Pipeline failed!'
         }
     }
 }
