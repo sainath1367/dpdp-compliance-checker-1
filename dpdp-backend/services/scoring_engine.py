@@ -6,6 +6,8 @@ import json
 import re
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+import logging
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -14,6 +16,44 @@ except ImportError:
 
 from core.config import settings
 from core.config import USE_EXTERNAL_API, EXTERNAL_API_KEY
+
+# ==============================
+# Logging Setup
+# ==============================
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# ==============================
+# Caching
+# ==============================
+cache = {}
+
+def get_cached_result(policy_text):
+    if policy_text in cache:
+        logging.info("Returning cached result")
+        return cache[policy_text]
+    return None
+
+def save_cache(policy_text, result):
+    cache[policy_text] = result
+    logging.info("Saved result to cache")
+
+# ==============================
+# Retry Logic
+# ==============================
+def call_llm_with_retry(prompt, retries=3):
+    import google.generativeai as genai
+    genai.configure(api_key=EXTERNAL_API_KEY)
+    model = genai.GenerativeModel("gemini-pro")
+
+    for i in range(retries):
+        try:
+            response = model.generate_content(prompt, generation_config={"temperature": 0.1}, request_options={"timeout": 10})
+            return response.text
+        except Exception as e:
+            logging.warning(f"Retry {i+1} failed: {e}")
+            if i < retries - 1:
+                time.sleep(2)
+    raise Exception("LLM failed after retries")
 
 
 # ==============================
@@ -51,10 +91,6 @@ def encode_texts(texts):
 
 
 def analyze_with_llm(policy_text, clauses):
-    import google.generativeai as genai
-
-    genai.configure(api_key=EXTERNAL_API_KEY)
-
     prompt = f"""
 You are an expert auditor for India's DPDP Act.
 
@@ -90,10 +126,8 @@ OUTPUT FORMAT (STRICT JSON ONLY):
 }}
 """
 
-    model = genai.GenerativeModel("gemini-pro")
-    response = model.generate_content(prompt)
-
-    return response.text
+    raw = call_llm_with_retry(prompt)
+    return raw
 
 
 def clean_json(response_text):
@@ -109,60 +143,8 @@ def clean_json(response_text):
     return json.loads(response_text)
 
 
-def cosine_similarity(a, b):
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    a_norm = np.linalg.norm(a, axis=1, keepdims=True)
-    b_norm = np.linalg.norm(b, axis=1, keepdims=True)
-    a_norm[a_norm == 0] = 1
-    b_norm[b_norm == 0] = 1
-    return np.dot(a, b.T) / (a_norm * b_norm.T)
-
-
-# ==============================
-# Load DPDP Clauses
-# ==============================
-def load_clauses():
-
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    file_path = os.path.join(base_dir, "data", "dpdp_clauses.json")
-
-    if not os.path.exists(file_path):
-        alt_path = os.path.join(os.getcwd(), "data", "dpdp_clauses.json")
-        if os.path.exists(alt_path):
-            file_path = alt_path
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"DPDP clauses file not found. Checked: {file_path}"
-        )
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-# ==============================
-# AI Compliance Analysis
-# ==============================
-def analyze_compliance(policy_text: str):
-
+def analyze_with_local_model(policy_text):
     clauses = load_clauses()
-
-    if USE_EXTERNAL_API:
-        try:
-            llm_response = analyze_with_llm(policy_text, clauses)
-            result = clean_json(llm_response)
-            # Add missing fields for compatibility
-            result.setdefault("section_analysis", {})
-            result.setdefault("missing_clauses", [])
-            result.setdefault("graph_path", "")
-            result.setdefault("explanations", [])
-            return result
-        except Exception as e:
-            print(f"LLM parsing failed, fallback to local model: {e}")
-            # Fall through to local logic
-
-    # Local model logic continues
 
     results = {}
     missing = []
@@ -298,3 +280,70 @@ def analyze_compliance(policy_text: str):
         "graph_path": graph_path,
         "explanations": explanations
     }
+
+
+def cosine_similarity(a, b):
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    a_norm = np.linalg.norm(a, axis=1, keepdims=True)
+    b_norm = np.linalg.norm(b, axis=1, keepdims=True)
+    a_norm[a_norm == 0] = 1
+    b_norm[b_norm == 0] = 1
+    return np.dot(a, b.T) / (a_norm * b_norm.T)
+
+
+# ==============================
+# Load DPDP Clauses
+# ==============================
+def load_clauses():
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    file_path = os.path.join(base_dir, "data", "dpdp_clauses.json")
+
+    if not os.path.exists(file_path):
+        alt_path = os.path.join(os.getcwd(), "data", "dpdp_clauses.json")
+        if os.path.exists(alt_path):
+            file_path = alt_path
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"DPDP clauses file not found. Checked: {file_path}"
+        )
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ==============================
+# AI Compliance Analysis
+# ==============================
+def analyze_compliance(policy_text: str):
+
+    # Check cache first
+    cached = get_cached_result(policy_text)
+    if cached:
+        return cached
+
+    clauses = load_clauses()
+
+    if USE_EXTERNAL_API:
+        logging.info("Using external API for analysis")
+        try:
+            llm_response = analyze_with_llm(policy_text, clauses)
+            result = clean_json(llm_response)
+            # Add missing fields for compatibility
+            result.setdefault("section_analysis", {})
+            result.setdefault("missing_clauses", [])
+            result.setdefault("graph_path", "")
+            result.setdefault("explanations", [])
+            save_cache(policy_text, result)
+            return result
+        except Exception as e:
+            logging.error(f"LLM parsing failed, fallback to local model: {e}")
+            # Fall through to local logic
+
+    # Local model logic
+    logging.info("Using local model for analysis")
+    result = analyze_with_local_model(policy_text)
+    save_cache(policy_text, result)
+    return result
