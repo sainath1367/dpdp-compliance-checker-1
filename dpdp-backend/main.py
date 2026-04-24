@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import uvicorn
 
 import os
@@ -12,10 +13,12 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
 from services.scoring_engine import analyze_compliance
+from services.report_generator import generate_pdf_report
 
 
 app = FastAPI(title="DPDP Compliance Checker API")
 
+LAST_REPORT_PATH = None
 
 # Allow React frontend
 app.add_middleware(
@@ -35,8 +38,29 @@ if not os.path.exists("reports"):
 # Serve generated files (charts, reports)
 app.mount("/reports", StaticFiles(directory="reports"), name="reports")
 
-# Serve frontend static files
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve frontend static files when available
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+
+# ==========================
+# Root Route - API Status
+# ==========================
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "DPDP Compliance Checker API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "endpoints": {
+            "analyze_policy": "/analyze-policy",
+            "analyze_url": "/analyze-url",
+            "download_report": "/download-report",
+            "reports_history": "/reports-history"
+        }
+    }
 
 
 # ==========================
@@ -55,6 +79,10 @@ async def analyze_policy(file: UploadFile = File(...)):
     # Save Report History
     save_report(file.filename, result)
 
+    # Generate and save PDF report
+    global LAST_REPORT_PATH
+    LAST_REPORT_PATH = generate_pdf_report(result, file.filename)
+
     return result
 
 
@@ -72,7 +100,16 @@ class URLRequest(BaseModel):
 def analyze_url(data: URLRequest):
 
     try:
-        response = requests.get(data.url)
+        response = requests.get(
+            data.url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            },
+            timeout=15,
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch URL: {response.status_code}")
 
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -89,10 +126,25 @@ def analyze_url(data: URLRequest):
 
         save_report(data.url, result)
 
+        global LAST_REPORT_PATH
+        LAST_REPORT_PATH = generate_pdf_report(result, data.url)
+
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================
+# Legacy compatibility route
+# ==========================
+@app.post("/check-compliance/")
+async def check_compliance(website_url: str = Form(...)):
+    """Compatibility alias for legacy frontend or external clients."""
+    return analyze_url(URLRequest(url=website_url))
+
 
 # ==========================
 # Save Report History
@@ -118,6 +170,21 @@ def save_report(source, result):
 
     with open(reports_file, "w") as f:
         json.dump(history, f, indent=2)
+
+
+# ==========================
+# Download PDF Report
+# ==========================
+@app.get("/download-report")
+def download_report():
+    global LAST_REPORT_PATH
+    if LAST_REPORT_PATH and os.path.exists(LAST_REPORT_PATH):
+        return FileResponse(
+            LAST_REPORT_PATH,
+            media_type="application/pdf",
+            filename="dpdp_compliance_report.pdf"
+        )
+    raise HTTPException(status_code=404, detail="Report not found.")
 
 
 # ==========================
