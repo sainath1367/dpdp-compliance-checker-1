@@ -1,0 +1,4 @@
+streamlit
+fpdf
+spacy
+en-core-web-sm
