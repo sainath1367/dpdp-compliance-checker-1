@@ -20,10 +20,7 @@ pipeline {
         stage('Backend Setup') {
             steps {
                 sh '''
-                    cd dpdp-backend
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install -r requirements.txt
+                    cd dpdp-backend && python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt
                 '''
             }
         }
@@ -31,9 +28,7 @@ pipeline {
         stage('Backend Test') {
             steps {
                 sh '''
-                    cd dpdp-backend
-                    . venv/bin/activate
-                    python -c "print('Backend OK')"
+                    cd dpdp-backend && . venv/bin/activate && python3 -c "print('Backend OK')"
                 '''
             }
         }
