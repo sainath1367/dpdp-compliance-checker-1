@@ -27,15 +27,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # ==============================
 cache = {}
 
-def get_cached_result(policy_text):
-    if policy_text in cache:
+def get_cached_result(cache_key):
+    if cache_key in cache:
         logging.info("Returning cached result")
-        return cache[policy_text]
+        return cache[cache_key]
     return None
 
-def save_cache(policy_text, result):
-    cache[policy_text] = result
+def save_cache(cache_key, result):
+    cache[cache_key] = result
     logging.info("Saved result to cache")
+
+def make_cache_key(policy_text, use_ai):
+    return f"use_ai={use_ai}:{policy_text}"
 
 # ==============================
 # Retry Logic
@@ -57,14 +60,21 @@ def call_llm_with_retry(prompt, retries=3):
 
 
 # ==============================
-# Load Semantic Model
+# Load Semantic Model (Lazy Loading)
 # ==============================
 model = None
-if SentenceTransformer is not None:
-    try:
-        model = SentenceTransformer(settings.MODEL_NAME)
-    except Exception:
-        model = None
+
+def get_model():
+    global model
+    if model is None and SentenceTransformer is not None:
+        try:
+            logging.info("Loading sentence transformer model...")
+            model = SentenceTransformer(settings.MODEL_NAME)
+            logging.info("Model loaded successfully")
+        except Exception as e:
+            logging.warning(f"Failed to load model: {e}")
+            model = None
+    return model
 
 
 def simple_encode(texts):
@@ -85,6 +95,7 @@ def simple_encode(texts):
 
 
 def encode_texts(texts):
+    model = get_model()
     if model is not None:
         return model.encode(texts)
     return simple_encode(texts)
@@ -317,16 +328,20 @@ def load_clauses():
 # ==============================
 # AI Compliance Analysis
 # ==============================
-def analyze_compliance(policy_text: str):
+def analyze_compliance(policy_text: str, use_ai: bool | None = None):
 
-    # Check cache first
-    cached = get_cached_result(policy_text)
+    if use_ai is None:
+        use_ai = USE_EXTERNAL_API
+
+    cache_key = make_cache_key(policy_text, use_ai)
+    cached = get_cached_result(cache_key)
     if cached:
         return cached
 
     clauses = load_clauses()
+    fallback = False
 
-    if USE_EXTERNAL_API:
+    if use_ai and USE_EXTERNAL_API:
         logging.info("Using external API for analysis")
         try:
             llm_response = analyze_with_llm(policy_text, clauses)
@@ -336,14 +351,20 @@ def analyze_compliance(policy_text: str):
             result.setdefault("missing_clauses", [])
             result.setdefault("graph_path", "")
             result.setdefault("explanations", [])
-            save_cache(policy_text, result)
+            result["analysis_source"] = "AI"
+            result["fallback_to_local"] = False
+            save_cache(cache_key, result)
             return result
         except Exception as e:
             logging.error(f"LLM parsing failed, fallback to local model: {e}")
-            # Fall through to local logic
+            fallback = True
+            use_ai = False
 
     # Local model logic
     logging.info("Using local model for analysis")
     result = analyze_with_local_model(policy_text)
-    save_cache(policy_text, result)
+    result["analysis_source"] = "local"
+    result["fallback_to_local"] = fallback
+    result["used_ai_request"] = use_ai
+    save_cache(cache_key, result)
     return result

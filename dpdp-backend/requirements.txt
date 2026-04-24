@@ -70,3 +70,4 @@ urllib3==2.2.1
 uvicorn==0.29.0
 google-generativeai
 google-generativeai
+pytest==7.4.2

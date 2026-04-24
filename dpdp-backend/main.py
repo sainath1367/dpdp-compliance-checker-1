@@ -11,8 +11,6 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
-
-from services.scoring_engine import analyze_compliance
 from services.report_generator import generate_pdf_report
 
 
@@ -35,15 +33,6 @@ if not os.path.exists("reports"):
     os.makedirs("reports")
 
 
-# Serve generated files (charts, reports)
-app.mount("/reports", StaticFiles(directory="reports"), name="reports")
-
-# Serve frontend static files when available
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.isdir(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-
-
 # ==========================
 # Root Route - API Status
 # ==========================
@@ -55,6 +44,7 @@ def root():
         "version": "1.0.0",
         "docs": "/docs",
         "endpoints": {
+            "analyze_raw_text": "/analyze",
             "analyze_policy": "/analyze-policy",
             "analyze_url": "/analyze-url",
             "download_report": "/download-report",
@@ -67,14 +57,15 @@ def root():
 # Analyze Privacy Policy (File Upload)
 # ==========================
 @app.post("/analyze-policy")
-async def analyze_policy(file: UploadFile = File(...)):
+async def analyze_policy(file: UploadFile = File(...), use_ai: bool = Form(True)):
 
     # Read uploaded file
     content = await file.read()
     text = content.decode("utf-8", errors="ignore")
 
     # Run AI compliance analysis
-    result = analyze_compliance(text)
+    from services.scoring_engine import analyze_compliance
+    result = analyze_compliance(text, use_ai=use_ai)
 
     # Save Report History
     save_report(file.filename, result)
@@ -83,7 +74,7 @@ async def analyze_policy(file: UploadFile = File(...)):
     global LAST_REPORT_PATH
     LAST_REPORT_PATH = generate_pdf_report(result, file.filename)
 
-    return result
+    return build_api_response(result)
 
 
 # ==========================
@@ -91,6 +82,29 @@ async def analyze_policy(file: UploadFile = File(...)):
 # ==========================
 class URLRequest(BaseModel):
     url: str
+    use_ai: bool = True
+
+
+class AnalyzeRequest(BaseModel):
+    policy_text: str
+    use_ai: bool = True
+
+
+def build_api_response(result):
+    return {
+        "status": "success",
+        "data": result
+    }
+
+
+# ==========================
+# Analyze raw policy text
+# ==========================
+@app.post("/analyze")
+def analyze_text(payload: AnalyzeRequest):
+    from services.scoring_engine import analyze_compliance
+    result = analyze_compliance(payload.policy_text, use_ai=payload.use_ai)
+    return build_api_response(result)
 
 
 # ==========================
@@ -121,15 +135,16 @@ def analyze_url(data: URLRequest):
         else:
             text = soup.get_text(separator=" ")
 
-        # Run AI analysis
-        result = analyze_compliance(text)
+        # Run analysis
+        from services.scoring_engine import analyze_compliance
+        result = analyze_compliance(text, use_ai=data.use_ai)
 
         save_report(data.url, result)
 
         global LAST_REPORT_PATH
         LAST_REPORT_PATH = generate_pdf_report(result, data.url)
 
-        return result
+        return build_api_response(result)
 
     except HTTPException:
         raise
@@ -262,3 +277,18 @@ def export_csv():
         }
     except Exception as e:
         return {"error": f"Failed to export CSV: {str(e)}"}
+
+
+# Serve generated files (charts, reports)
+app.mount("/reports", StaticFiles(directory="reports"), name="reports")
+
+# Serve frontend static files when available (mounted last to give API routes priority)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+
+# Serve frontend static files when available (mounted last to not interfere with API routes)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
