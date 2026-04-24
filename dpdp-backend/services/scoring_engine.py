@@ -13,6 +13,7 @@ except ImportError:
     SentenceTransformer = None
 
 from core.config import settings
+from core.config import USE_EXTERNAL_API, EXTERNAL_API_KEY
 
 
 # ==============================
@@ -47,6 +48,35 @@ def encode_texts(texts):
     if model is not None:
         return model.encode(texts)
     return simple_encode(texts)
+
+
+def analyze_with_llm(policy_text, clauses):
+    import google.generativeai as genai
+
+    genai.configure(api_key=EXTERNAL_API_KEY)
+
+    prompt = f"""
+You are an expert Indian DPDP Act auditor.
+
+Analyze the following privacy policy:
+
+{policy_text}
+
+Against these clauses:
+{json.dumps(clauses, indent=2)}
+
+Return ONLY JSON:
+{{
+    "overall_score": number,
+    "risk_level": "Low/Medium/High",
+    "explanations": ["..."]
+}}
+"""
+
+    model = genai.GenerativeModel("gemini-pro")
+    response = model.generate_content(prompt)
+
+    return response.text
 
 
 def cosine_similarity(a, b):
@@ -87,6 +117,22 @@ def load_clauses():
 def analyze_compliance(policy_text: str):
 
     clauses = load_clauses()
+
+    if USE_EXTERNAL_API:
+        try:
+            llm_response = analyze_with_llm(policy_text, clauses)
+            result = json.loads(llm_response)
+            # Add missing fields for compatibility
+            result.setdefault("section_analysis", {})
+            result.setdefault("missing_clauses", [])
+            result.setdefault("recommendations", [])
+            result.setdefault("graph_path", "")
+            return result
+        except Exception as e:
+            print(f"API failed, fallback to local model: {e}")
+            # Fall through to local logic
+
+    # Local model logic continues
 
     results = {}
     missing = []
