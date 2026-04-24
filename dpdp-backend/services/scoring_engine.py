@@ -3,10 +3,14 @@ matplotlib.use("Agg")
 
 import os
 import json
+import re
 import numpy as np
 import matplotlib.pyplot as plt
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
 
 from core.config import settings
 
@@ -14,7 +18,45 @@ from core.config import settings
 # ==============================
 # Load Semantic Model
 # ==============================
-model = SentenceTransformer(settings.MODEL_NAME)
+model = None
+if SentenceTransformer is not None:
+    try:
+        model = SentenceTransformer(settings.MODEL_NAME)
+    except Exception:
+        model = None
+
+
+def simple_encode(texts):
+    tokens_list = [re.findall(r"\w+", text.lower()) for text in texts]
+    vocab = {}
+    for tokens in tokens_list:
+        for token in tokens:
+            if token not in vocab:
+                vocab[token] = len(vocab)
+
+    vectors = np.zeros((len(texts), len(vocab)), dtype=float)
+    for i, tokens in enumerate(tokens_list):
+        for token in tokens:
+            vectors[i, vocab[token]] += 1
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    return vectors / norms
+
+
+def encode_texts(texts):
+    if model is not None:
+        return model.encode(texts)
+    return simple_encode(texts)
+
+
+def cosine_similarity(a, b):
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    a_norm = np.linalg.norm(a, axis=1, keepdims=True)
+    b_norm = np.linalg.norm(b, axis=1, keepdims=True)
+    a_norm[a_norm == 0] = 1
+    b_norm[b_norm == 0] = 1
+    return np.dot(a, b.T) / (a_norm * b_norm.T)
 
 
 # ==============================
@@ -24,6 +66,16 @@ def load_clauses():
 
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     file_path = os.path.join(base_dir, "data", "dpdp_clauses.json")
+
+    if not os.path.exists(file_path):
+        alt_path = os.path.join(os.getcwd(), "data", "dpdp_clauses.json")
+        if os.path.exists(alt_path):
+            file_path = alt_path
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"DPDP clauses file not found. Checked: {file_path}"
+        )
 
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -61,7 +113,7 @@ def analyze_compliance(policy_text: str):
         }
 
     # Encode policy sentences
-    sentence_embeddings = model.encode(sentences)
+    sentence_embeddings = encode_texts(sentences)
 
     for clause in clauses:
 
@@ -70,7 +122,7 @@ def analyze_compliance(policy_text: str):
         clause_section = clause["section"]
         clause_category = clause["category"]
 
-        clause_embedding = model.encode([clause_text])
+        clause_embedding = encode_texts([clause_text])
 
         similarities = cosine_similarity(
             clause_embedding,
